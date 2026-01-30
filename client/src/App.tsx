@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Callback } from './pages/Callback';
+import { Transactions } from './pages/Transactions';
 import './index.css';
 
 const queryClient = new QueryClient();
@@ -85,7 +86,7 @@ function AppRoutes() {
                 path="/transactions"
                 element={
                     <ProtectedRoute>
-                        <Dashboard />
+                        <Transactions />
                     </ProtectedRoute>
                 }
             />
