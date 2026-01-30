@@ -14,8 +14,8 @@ async def lifespan(app: FastAPI):
     print(f"🚀 ML Service starting on port {settings.ml_service_port}")
     print(f"📊 Cache TTL: {settings.cache_ttl_hours} hours")
     print(f"🔮 Forecast horizon: {settings.forecast_months} months")
-    print(f"🤖 Gemini model: {settings.gemini_model}")
-    print(f"🔑 Gemini API key configured: {'Yes' if settings.gemini_api_key else 'No'}")
+    print(f"🤖 Gemini model: {settings.finadvice_gemini_model}")
+    print(f"🔑 Gemini API key configured: {'Yes' if settings.finadvice_gemini_key else 'No'}")
     yield
     # Shutdown
     print("👋 ML Service shutting down")

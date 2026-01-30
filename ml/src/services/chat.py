@@ -3,6 +3,8 @@ Financial Advisor Chat Service
 
 Uses Google Gemini with function calling to provide intelligent
 financial advice based on user's transaction data and metrics.
+
+Uses the new google-genai SDK (not google-generativeai).
 """
 
 import json
@@ -10,7 +12,8 @@ from datetime import datetime
 from typing import Optional
 from collections import defaultdict
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from ..config import get_settings
 from ..database import get_supabase
@@ -20,7 +23,7 @@ from .recurring_detector import get_recurring_for_user, FREQUENCY_PATTERNS
 
 
 # In-memory session storage (conversation history)
-_sessions: dict[str, list[dict]] = defaultdict(list)
+_sessions: dict[str, list[types.Content]] = defaultdict(list)
 
 # Maximum conversation history to keep per session
 MAX_HISTORY_LENGTH = 20
@@ -54,91 +57,93 @@ For general financial questions not related to their specific data, you can prov
 Today's date is: """ + datetime.now().strftime("%B %d, %Y")
 
 
-# Define available functions for the LLM
-AVAILABLE_FUNCTIONS = [
-    {
-        "name": "get_current_balance",
-        "description": "Get the user's current total balance across all linked bank accounts",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    },
-    {
-        "name": "get_financial_metrics",
-        "description": "Get comprehensive financial metrics including burn rate, runway, revenue growth, expense breakdown, and cash flow volatility",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    },
-    {
-        "name": "get_cash_flow_forecast",
-        "description": "Get a 3-month cash flow forecast with predicted balances and trend analysis",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    },
-    {
-        "name": "get_recurring_expenses",
-        "description": "Get a list of detected recurring expenses like rent, salaries, subscriptions, and loan EMIs with their amounts and frequencies",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    },
-    {
-        "name": "get_recent_transactions",
-        "description": "Get the most recent transactions for the user",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of transactions to retrieve (default: 10, max: 50)"
+# Define available functions for the LLM using new SDK format
+def _get_function_declarations() -> list[types.FunctionDeclaration]:
+    """Return function declarations for Gemini tools."""
+    return [
+        types.FunctionDeclaration(
+            name="get_current_balance",
+            description="Get the user's current total balance across all linked bank accounts",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={},
+                required=[]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="get_financial_metrics",
+            description="Get comprehensive financial metrics including burn rate, runway, revenue growth, expense breakdown, and cash flow volatility",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={},
+                required=[]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="get_cash_flow_forecast",
+            description="Get a 3-month cash flow forecast with predicted balances and trend analysis",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={},
+                required=[]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="get_recurring_expenses",
+            description="Get a list of detected recurring expenses like rent, salaries, subscriptions, and loan EMIs with their amounts and frequencies",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={},
+                required=[]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="get_recent_transactions",
+            description="Get the most recent transactions for the user",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "limit": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Number of transactions to retrieve (default: 10, max: 50)"
+                    ),
+                    "type": types.Schema(
+                        type=types.Type.STRING,
+                        description="Filter by transaction type: CREDIT, DEBIT, or ALL",
+                        enum=["CREDIT", "DEBIT", "ALL"]
+                    )
                 },
-                "type": {
-                    "type": "string",
-                    "enum": ["CREDIT", "DEBIT", "ALL"],
-                    "description": "Filter by transaction type"
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "get_expense_breakdown",
-        "description": "Get a breakdown of expenses by category (Payroll, Rent, Utilities, Marketing, etc.) with percentages",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
-    },
-    {
-        "name": "calculate_expense_impact",
-        "description": "Calculate how a potential expense would impact the business runway and financial health",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "number",
-                    "description": "The expense amount in rupees"
+                required=[]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="get_expense_breakdown",
+            description="Get a breakdown of expenses by category (Payroll, Rent, Utilities, Marketing, etc.) with percentages",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={},
+                required=[]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="calculate_expense_impact",
+            description="Calculate how a potential expense would impact the business runway and financial health",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "amount": types.Schema(
+                        type=types.Type.NUMBER,
+                        description="The expense amount in rupees"
+                    ),
+                    "is_recurring": types.Schema(
+                        type=types.Type.BOOLEAN,
+                        description="Whether this is a recurring monthly expense or one-time"
+                    )
                 },
-                "is_recurring": {
-                    "type": "boolean",
-                    "description": "Whether this is a recurring monthly expense or one-time"
-                }
-            },
-            "required": ["amount"]
-        }
-    }
-]
+                required=["amount"]
+            )
+        )
+    ]
 
 
 def _execute_function(user_id: str, function_name: str, arguments: dict) -> dict:
@@ -298,20 +303,14 @@ def _get_expense_recommendation(current_runway: Optional[float], new_runway: flo
         return "High risk. This expense would leave you with less than 3 months of runway. Strongly recommend deferring or finding alternative funding first."
 
 
-def _get_gemini_model():
-    """Initialize and return the Gemini model."""
+def _get_gemini_client() -> genai.Client:
+    """Initialize and return the Gemini client."""
     settings = get_settings()
     
-    if not settings.gemini_api_key:
-        raise ValueError("GEMINI_API_KEY not configured")
+    if not settings.finadvice_gemini_key:
+        raise ValueError("FINADVICE_GEMINI_KEY not configured")
     
-    genai.configure(api_key=settings.gemini_api_key)
-    
-    return genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=SYSTEM_PROMPT,
-        tools=[{"function_declarations": AVAILABLE_FUNCTIONS}]
-    )
+    return genai.Client(api_key=settings.finadvice_gemini_key)
 
 
 def chat(
@@ -338,26 +337,44 @@ def chat(
     # Get or create conversation history
     history = _sessions[session_id]
     
+    settings = get_settings()
+    
     try:
-        model = _get_gemini_model()
+        client = _get_gemini_client()
         
-        # Build conversation for Gemini
-        chat_session = model.start_chat(history=[
-            {"role": msg["role"], "parts": [msg["content"]]}
-            for msg in history
-        ])
+        # Build contents with history + new message
+        contents = list(history)  # Copy existing history
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=message)]
+        ))
         
-        # Send user message
-        response = chat_session.send_message(message)
+        # Configure tools
+        tools = [
+            types.Tool(function_declarations=_get_function_declarations())
+        ]
+        
+        # Generate content config
+        generate_config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            tools=tools,
+        )
+        
+        # Send request
+        response = client.models.generate_content(
+            model=settings.finadvice_gemini_model,
+            contents=contents,
+            config=generate_config,
+        )
         
         # Handle function calls in a loop
-        max_iterations = 10  # Prevent infinite loops
+        max_iterations = 10
         iterations = 0
         
         while iterations < max_iterations:
             iterations += 1
             
-            # Check if we have any parts in the response
+            # Check for function calls in the response
             if not response.candidates or not response.candidates[0].content.parts:
                 break
             
@@ -366,15 +383,18 @@ def chat(
             # Collect ALL function calls from ALL parts
             function_calls = []
             for part in parts:
-                if hasattr(part, 'function_call') and part.function_call and part.function_call.name:
+                if part.function_call:
                     function_calls.append(part.function_call)
             
             # If no function calls, we have the final text response
             if not function_calls:
                 break
             
+            # Add the model's response (with function calls) to contents
+            contents.append(response.candidates[0].content)
+            
             # Execute ALL function calls and collect responses
-            function_responses = []
+            function_response_parts = []
             for func_call in function_calls:
                 func_name = func_call.name
                 func_args = dict(func_call.args) if func_call.args else {}
@@ -384,68 +404,47 @@ def chat(
                 # Execute the function
                 result = _execute_function(user_id, func_name, func_args)
                 
-                function_responses.append(
-                    genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=func_name,
-                            response=result
-                        )
+                function_response_parts.append(
+                    types.Part.from_function_response(
+                        name=func_name,
+                        response=result
                     )
                 )
             
-            # Send ALL function responses back to the model at once
-            response = chat_session.send_message(function_responses)
-            print(f"📨 Sent {len(function_responses)} function response(s)")
+            # Add function responses as a new content block
+            contents.append(types.Content(
+                role="user",
+                parts=function_response_parts
+            ))
+            
+            print(f"📨 Sent {len(function_response_parts)} function response(s)")
+            
+            # Get next response
+            response = client.models.generate_content(
+                model=settings.finadvice_gemini_model,
+                contents=contents,
+                config=generate_config,
+            )
         
-        # Extract final text response safely
+        # Extract final text response
         response_text = ""
-        try:
-            response_text = response.text
-        except ValueError as e:
-            print(f"⚠️ response.text failed: {e}")
-            print(f"⚠️ Response candidates: {response.candidates}")
-            if response.candidates:
-                print(f"⚠️ Finish reason: {response.candidates[0].finish_reason}")
-                print(f"⚠️ Content parts: {response.candidates[0].content.parts if response.candidates[0].content else 'No content'}")
-            
-            # response.text failed - try to extract from parts directly
-            if response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        response_text += part.text
-            
-            if not response_text:
-                # Try one more approach - check if there's a pending function call we missed
-                if response.candidates and response.candidates[0].content.parts:
-                    part = response.candidates[0].content.parts[0]
-                    if hasattr(part, 'function_call') and part.function_call and part.function_call.name:
-                        # There's still a function call - execute it
-                        func_call = part.function_call
-                        func_name = func_call.name
-                        func_args = dict(func_call.args) if func_call.args else {}
-                        
-                        print(f"🔧 Found pending function: {func_name}({func_args})")
-                        result = _execute_function(user_id, func_name, func_args)
-                        
-                        response = chat_session.send_message(
-                            genai.protos.Part(
-                                function_response=genai.protos.FunctionResponse(
-                                    name=func_name,
-                                    response=result
-                                )
-                            )
-                        )
-                        try:
-                            response_text = response.text
-                        except:
-                            pass
-                
-                if not response_text:
-                    response_text = "I've processed your request but couldn't generate a response. Please try rephrasing your question."
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    response_text += part.text
         
-        # Update history
-        history.append({"role": "user", "content": message})
-        history.append({"role": "model", "content": response_text})
+        if not response_text:
+            response_text = "I've processed your request but couldn't generate a response. Please try rephrasing your question."
+        
+        # Update history with user message and model response
+        history.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=message)]
+        ))
+        history.append(types.Content(
+            role="model",
+            parts=[types.Part.from_text(text=response_text)]
+        ))
         
         # Trim history if too long
         if len(history) > MAX_HISTORY_LENGTH * 2:
@@ -458,6 +457,8 @@ def chat(
         
     except Exception as e:
         print(f"Chat error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "response": f"I'm sorry, I encountered an error processing your request. Please try again. (Error: {str(e)})",
             "session_id": session_id,
@@ -475,4 +476,12 @@ def clear_session(session_id: str) -> bool:
 
 def get_session_history(session_id: str) -> list[dict]:
     """Get conversation history for a session."""
-    return _sessions.get(session_id, [])
+    history = _sessions.get(session_id, [])
+    # Convert Content objects to simple dicts for API response
+    return [
+        {
+            "role": msg.role,
+            "content": "".join(part.text for part in msg.parts if part.text)
+        }
+        for msg in history
+    ]

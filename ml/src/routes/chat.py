@@ -92,6 +92,6 @@ async def chat_health():
     
     return {
         "status": "healthy" if has_api_key else "unconfigured",
-        "model": settings.gemini_model,
+        "model": settings.finadvice_gemini_model,
         "api_key_configured": has_api_key
     }

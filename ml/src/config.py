@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     cache_ttl_hours: int = 168  # 7 days
     forecast_months: int = 3
     
-    # Gemini API
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-3-flash-preview"  # More stable, better free tier limits
+    # Gemini API (using custom name to avoid system env var conflicts)
+    finadvice_gemini_key: str = ""
+    finadvice_gemini_model: str = "gemini-1.5-flash"  # Stable model with better quota limits
     
     class Config:
         env_file = ".env"
