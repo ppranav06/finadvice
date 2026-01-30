@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Auth.css';
 
@@ -28,47 +28,71 @@ export function Login() {
 
     return (
         <div className="auth-container">
-            <div className="auth-card">
-                <div className="auth-header">
-                    <h1 className="auth-logo">FinAdvice</h1>
-                    <p className="auth-subtitle">Welcome back! Sign in to your account</p>
+            {/* Background Blobs */}
+            <div className="blob blob-top"></div>
+            <div className="blob blob-bottom"></div>
+
+            <div className="auth-wrapper">
+                <div className="glass-panel">
+                    <div className="auth-header">
+                        <div className="logo-container"></div>
+                        <h1 className="auth-title">Institutional Access</h1>
+                        <p className="auth-subtitle">Sign in to your enterprise account</p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="auth-form">
+                        <div className="form-group">
+                            <label htmlFor="email">Username</label>
+                            <div className="input-wrapper">
+                                <span className="material-symbols-outlined input-icon">person</span>
+                                <input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Enter your username"
+                                    required
+                                    className="auth-input"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="password">Password</label>
+                            <div className="input-wrapper">
+                                <span className="material-symbols-outlined input-icon">lock</span>
+                                <input
+                                    id="password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    required
+                                    className="auth-input"
+                                />
+                            </div>
+                        </div>
+
+                        {error && <div className="auth-error">{error}</div>}
+
+                        <button type="submit" className="btn-liquid" disabled={loading}>
+                            <span>{loading ? 'Authenticating...' : 'Execute Login'}</span>
+                            <span className="material-symbols-outlined btn-icon">arrow_forward</span>
+                        </button>
+                    </form>
+
+                    <div className="auth-links">
+                        <a href="#">Forgot Password?</a>
+                        <a href="#">Request Access</a>
+                    </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="auth-form">
-                    {error && <div className="auth-error">{error}</div>}
-
-                    <div className="form-group">
-                        <label htmlFor="email">Email</label>
-                        <input
-                            id="email"
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="you@business.com"
-                            required
-                        />
+                <div className="secure-badge-container">
+                    <div className="secure-badge">
+                        <span className="material-symbols-outlined">shield_lock</span>
+                        <span>Secure Institutional Gateway 2.0</span>
                     </div>
-
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                        />
-                    </div>
-
-                    <button type="submit" className="auth-submit" disabled={loading}>
-                        {loading ? 'Signing in...' : 'Sign In'}
-                    </button>
-                </form>
-
-                <p className="auth-footer">
-                    Don't have an account? <Link to="/register">Create one</Link>
-                </p>
+                </div>
             </div>
         </div>
     );
