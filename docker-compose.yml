@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Node.js Express Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SETU_BASE_URL=${SETU_BASE_URL}
+      - SETU_CLIENT_ID=${SETU_CLIENT_ID}
+      - SETU_CLIENT_SECRET=${SETU_CLIENT_SECRET}
+      - SETU_PRODUCT_INSTANCE_ID=${SETU_PRODUCT_INSTANCE_ID}
+      - ML_SERVICE_URL=http://ml:8000
+    depends_on:
+      - ml
+    networks:
+      - finadvice-network
+    restart: unless-stopped
+
+  # Python ML Service
+  ml:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - ML_SERVICE_PORT=8000
+      - CACHE_TTL_HOURS=168
+      - FORECAST_MONTHS=3
+    networks:
+      - finadvice-network
+    restart: unless-stopped
+
+  # React Client (optional - for production builds)
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - server
+    networks:
+      - finadvice-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+networks:
+  finadvice-network:
+    driver: bridge

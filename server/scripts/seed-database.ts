@@ -8,50 +8,89 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 );
 
+// Configuration
+const MONTHS_OF_DATA = 12; // Generate 12 months of transaction history
+const TARGET_TRANSACTION_COUNT = 800; // ~66 transactions per month
+
 // Realistic SMB transaction categories and descriptions
-const transactionTemplates = {
+// Split into RECURRING (predictable patterns) and ONE_TIME (variable)
+const recurringTransactionTemplates = {
+    DEBIT: [
+        { narration: 'Rent Payment - Office Space', mode: 'NEFT', category: 'Rent', amount: 65000, frequencyDays: 30 },
+        { narration: 'Staff Salary - Monthly Payroll', mode: 'NEFT', category: 'Payroll', amount: 150000, frequencyDays: 30 },
+        { narration: 'EMI - Business Loan HDFC', mode: 'NACH', category: 'Loan', amount: 45000, frequencyDays: 30 },
+        { narration: 'Internet & Phone Bill - Airtel', mode: 'NACH', category: 'Utilities', amount: 4500, frequencyDays: 30 },
+        { narration: 'Software Subscription - Zoho One', mode: 'Card', category: 'Software', amount: 12000, frequencyDays: 30 },
+        { narration: 'AWS Cloud Services', mode: 'Card', category: 'Software', amount: 25000, frequencyDays: 30 },
+        { narration: 'Electricity Bill - {provider}', mode: 'NACH', category: 'Utilities', amount: 18000, frequencyDays: 30 },
+        { narration: 'GST Payment - {quarter}', mode: 'NEFT', category: 'Tax', amount: 85000, frequencyDays: 90 },
+        { narration: 'Insurance Premium - Fire & Theft', mode: 'NACH', category: 'Operations', amount: 35000, frequencyDays: 90 },
+    ],
+};
+
+const oneTimeTransactionTemplates = {
     CREDIT: [
-        { narration: 'Payment received - Invoice #INV-2024-{num}', mode: 'NEFT', category: 'Sales' },
-        { narration: 'UPI Payment from Customer', mode: 'UPI', category: 'Sales' },
-        { narration: 'IMPS Transfer - Order Payment', mode: 'IMPS', category: 'Sales' },
-        { narration: 'Razorpay Settlement', mode: 'NEFT', category: 'Payment Gateway' },
-        { narration: 'GST Refund - {quarter}', mode: 'NEFT', category: 'Tax Refund' },
-        { narration: 'Interest Credit', mode: 'SYSTEM', category: 'Interest' },
-        { narration: 'Client Advance Payment', mode: 'UPI', category: 'Sales' },
-        { narration: 'Marketplace Payout - Amazon/Flipkart', mode: 'NEFT', category: 'Sales' },
+        { narration: 'Payment received - Invoice #INV-{year}-{num}', mode: 'NEFT', category: 'Sales', minAmount: 15000, maxAmount: 250000 },
+        { narration: 'UPI Payment from Customer', mode: 'UPI', category: 'Sales', minAmount: 2000, maxAmount: 50000 },
+        { narration: 'IMPS Transfer - Order Payment', mode: 'IMPS', category: 'Sales', minAmount: 5000, maxAmount: 100000 },
+        { narration: 'Razorpay Settlement - Daily', mode: 'NEFT', category: 'Payment Gateway', minAmount: 10000, maxAmount: 150000 },
+        { narration: 'GST Refund - {quarter}', mode: 'NEFT', category: 'Tax Refund', minAmount: 25000, maxAmount: 75000 },
+        { narration: 'Interest Credit - Savings', mode: 'SYSTEM', category: 'Interest', minAmount: 500, maxAmount: 5000 },
+        { narration: 'Client Advance Payment', mode: 'UPI', category: 'Sales', minAmount: 20000, maxAmount: 100000 },
+        { narration: 'Marketplace Payout - Amazon', mode: 'NEFT', category: 'Sales', minAmount: 30000, maxAmount: 200000 },
+        { narration: 'Marketplace Payout - Flipkart', mode: 'NEFT', category: 'Sales', minAmount: 20000, maxAmount: 150000 },
+        { narration: 'Contract Payment - Project Milestone', mode: 'NEFT', category: 'Sales', minAmount: 50000, maxAmount: 300000 },
     ],
     DEBIT: [
-        { narration: 'Vendor Payment - Raw Materials', mode: 'NEFT', category: 'Inventory' },
-        { narration: 'Electricity Bill - {provider}', mode: 'NACH', category: 'Utilities' },
-        { narration: 'Staff Salary - {month}', mode: 'NEFT', category: 'Payroll' },
-        { narration: 'Rent Payment - Office/Warehouse', mode: 'NEFT', category: 'Rent' },
-        { narration: 'GST Payment - {quarter}', mode: 'NEFT', category: 'Tax' },
-        { narration: 'UPI Payment - Petty Cash', mode: 'UPI', category: 'Operations' },
-        { narration: 'EMI - Business Loan', mode: 'NACH', category: 'Loan' },
-        { narration: 'Internet & Phone Bill', mode: 'NACH', category: 'Utilities' },
-        { narration: 'Supplier Payment - Packaging', mode: 'IMPS', category: 'Inventory' },
-        { narration: 'Marketing - Google/Meta Ads', mode: 'Card', category: 'Marketing' },
-        { narration: 'Software Subscription - Tally/Zoho', mode: 'Card', category: 'Software' },
-        { narration: 'Courier & Logistics', mode: 'UPI', category: 'Shipping' },
-        { narration: 'Office Supplies', mode: 'Card', category: 'Operations' },
+        { narration: 'Vendor Payment - Raw Materials', mode: 'NEFT', category: 'Inventory', minAmount: 15000, maxAmount: 120000 },
+        { narration: 'UPI Payment - Petty Cash', mode: 'UPI', category: 'Operations', minAmount: 500, maxAmount: 5000 },
+        { narration: 'Supplier Payment - Packaging', mode: 'IMPS', category: 'Inventory', minAmount: 8000, maxAmount: 40000 },
+        { narration: 'Marketing - Google Ads', mode: 'Card', category: 'Marketing', minAmount: 5000, maxAmount: 50000 },
+        { narration: 'Marketing - Meta Ads', mode: 'Card', category: 'Marketing', minAmount: 3000, maxAmount: 30000 },
+        { narration: 'Courier & Logistics - Delhivery', mode: 'UPI', category: 'Shipping', minAmount: 2000, maxAmount: 25000 },
+        { narration: 'Office Supplies - Amazon Business', mode: 'Card', category: 'Operations', minAmount: 1000, maxAmount: 15000 },
+        { narration: 'Equipment Maintenance', mode: 'NEFT', category: 'Operations', minAmount: 5000, maxAmount: 30000 },
+        { narration: 'Travel - Business Trip', mode: 'Card', category: 'Operations', minAmount: 10000, maxAmount: 50000 },
+        { narration: 'Professional Services - CA Fees', mode: 'NEFT', category: 'Operations', minAmount: 15000, maxAmount: 40000 },
+        { narration: 'Freelancer Payment', mode: 'UPI', category: 'Payroll', minAmount: 10000, maxAmount: 50000 },
     ],
 };
 
 const providers = ['BESCOM', 'MSEDCL', 'TATA Power', 'CESC'];
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const quarters = ['Q1 FY25', 'Q2 FY25', 'Q3 FY25', 'Q4 FY25'];
+const quarters = ['Q1 FY25', 'Q2 FY25', 'Q3 FY25', 'Q4 FY26'];
 
 function randomBetween(min: number, max: number): number {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function generateTransactionNarration(template: { narration: string; mode: string; category: string }): { narration: string; mode: string; category: string } {
+// Add some variance to recurring amounts (±5%)
+function varyAmount(baseAmount: number): number {
+    const variance = baseAmount * 0.05;
+    return baseAmount + (Math.random() * variance * 2 - variance);
+}
+
+function generateOneTimeNarration(template: { narration: string; mode: string; category: string; minAmount: number; maxAmount: number }, date: Date): { narration: string; mode: string; category: string; amount: number } {
     let narration = template.narration;
     narration = narration.replace('{num}', String(randomBetween(1000, 9999)));
+    narration = narration.replace('{year}', String(date.getFullYear()));
     narration = narration.replace('{provider}', providers[randomBetween(0, providers.length - 1)]);
-    narration = narration.replace('{month}', months[randomBetween(0, 11)]);
+    narration = narration.replace('{month}', months[date.getMonth()]);
     narration = narration.replace('{quarter}', quarters[randomBetween(0, 3)]);
-    return { ...template, narration };
+    
+    // Add some seasonality - higher sales in certain months
+    let amount = randomBetween(template.minAmount, template.maxAmount);
+    const month = date.getMonth();
+    // Q4 (Oct-Dec) and Q1 (Jan-Mar) typically see higher sales
+    if (month >= 9 || month <= 2) {
+        amount = Math.round(amount * 1.2);
+    }
+    // Summer slowdown (Apr-Jun)
+    if (month >= 3 && month <= 5) {
+        amount = Math.round(amount * 0.85);
+    }
+    
+    return { narration, mode: template.mode, category: template.category, amount };
 }
 
 async function seedDatabase() {
@@ -142,55 +181,73 @@ async function seedDatabase() {
     }
     console.log(`   ✅ Created ${accounts.length} bank accounts\n`);
 
-    // 4. Generate realistic transactions for the past 6 months
-    console.log('💸 Generating transactions...');
+    // 4. Generate recurring transactions (predictable patterns)
+    console.log('💸 Generating recurring transactions...');
     const transactions: any[] = [];
     const now = new Date();
+    const startDate = new Date(now.getTime() - MONTHS_OF_DATA * 30 * 24 * 60 * 60 * 1000);
 
-    // Generate ~100 transactions spread over 6 months
-    for (let i = 0; i < 100; i++) {
-        const daysAgo = randomBetween(1, 180);
-        const txnDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-
-        // 60% credits, 40% debits (healthy cash flow)
-        const isCredit = Math.random() < 0.45;
-        const type = isCredit ? 'CREDIT' : 'DEBIT';
-        const templates = transactionTemplates[type];
-        const template = generateTransactionNarration(templates[randomBetween(0, templates.length - 1)]);
-
-        // Realistic amounts based on category
-        let amount: number;
-        if (template.category === 'Sales') {
-            amount = randomBetween(5000, 150000);
-        } else if (template.category === 'Payroll') {
-            amount = randomBetween(25000, 75000);
-        } else if (template.category === 'Rent') {
-            amount = randomBetween(30000, 80000);
-        } else if (template.category === 'Tax') {
-            amount = randomBetween(15000, 100000);
-        } else if (template.category === 'Loan') {
-            amount = randomBetween(20000, 50000);
-        } else if (template.category === 'Inventory') {
-            amount = randomBetween(10000, 80000);
-        } else if (template.category === 'Payment Gateway') {
-            amount = randomBetween(20000, 200000);
-        } else {
-            amount = randomBetween(500, 15000);
+    // Generate recurring DEBIT transactions
+    for (const template of recurringTransactionTemplates.DEBIT) {
+        let currentDate = new Date(startDate);
+        
+        // Align to roughly the same day each month/quarter
+        const dayOfMonth = randomBetween(1, 10); // Recurring payments usually early in month
+        currentDate.setDate(dayOfMonth);
+        
+        while (currentDate < now) {
+            const account = accounts[randomBetween(0, accounts.length - 1)];
+            let narration = template.narration;
+            narration = narration.replace('{provider}', providers[randomBetween(0, providers.length - 1)]);
+            narration = narration.replace('{quarter}', `Q${Math.floor(currentDate.getMonth() / 3) + 1} FY${currentDate.getFullYear() % 100}`);
+            
+            transactions.push({
+                account_id: account.id,
+                user_id: userId,
+                txn_id: `TXN-REC-${Date.now()}-${transactions.length}`,
+                amount: Math.round(varyAmount(template.amount)),
+                type: 'DEBIT',
+                mode: template.mode,
+                narration,
+                txn_date: new Date(currentDate).toISOString(),
+                category: template.category,
+                is_manual: false,
+            });
+            
+            // Move to next occurrence
+            currentDate.setDate(currentDate.getDate() + template.frequencyDays);
         }
+    }
+    
+    console.log(`   ✅ Generated ${transactions.length} recurring transactions`);
 
-        // Assign to a random account
+    // 5. Generate one-time/variable transactions
+    console.log('💸 Generating one-time transactions...');
+    const oneTimeCount = TARGET_TRANSACTION_COUNT - transactions.length;
+    
+    for (let i = 0; i < oneTimeCount; i++) {
+        const daysAgo = randomBetween(1, MONTHS_OF_DATA * 30);
+        const txnDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+        
+        // 55% credits, 45% debits (slightly profitable)
+        const isCredit = Math.random() < 0.55;
+        const type = isCredit ? 'CREDIT' : 'DEBIT';
+        const templates = oneTimeTransactionTemplates[type];
+        const template = templates[randomBetween(0, templates.length - 1)];
+        const generated = generateOneTimeNarration(template, txnDate);
+        
         const account = accounts[randomBetween(0, accounts.length - 1)];
-
+        
         transactions.push({
             account_id: account.id,
             user_id: userId,
-            txn_id: `TXN-${Date.now()}-${i}`,
-            amount,
+            txn_id: `TXN-${Date.now()}-${transactions.length}`,
+            amount: generated.amount,
             type,
-            mode: template.mode,
-            narration: template.narration,
+            mode: generated.mode,
+            narration: generated.narration,
             txn_date: txnDate.toISOString(),
-            category: template.category,
+            category: generated.category,
             is_manual: false,
         });
     }
@@ -198,30 +255,81 @@ async function seedDatabase() {
     // Sort by date descending
     transactions.sort((a, b) => new Date(b.txn_date).getTime() - new Date(a.txn_date).getTime());
 
-    const { error: txnError } = await supabase
-        .from('transactions')
-        .insert(transactions);
+    // Insert in batches to avoid timeout
+    const batchSize = 100;
+    for (let i = 0; i < transactions.length; i += batchSize) {
+        const batch = transactions.slice(i, i + batchSize);
+        const { error: txnError } = await supabase
+            .from('transactions')
+            .insert(batch);
 
-    if (txnError) {
-        console.error('❌ Error creating transactions:', txnError);
-        process.exit(1);
+        if (txnError) {
+            console.error(`❌ Error creating transactions batch ${i / batchSize + 1}:`, txnError);
+            process.exit(1);
+        }
     }
 
-    console.log(`   ✅ Created ${transactions.length} transactions\n`);
+    console.log(`   ✅ Created ${transactions.length} total transactions\n`);
+
+    // 6. Create initial balance snapshots
+    console.log('📸 Creating balance snapshots...');
+    const snapshots: any[] = [];
+    
+    // Create daily snapshots for the last 30 days
+    for (let daysAgo = 30; daysAgo >= 0; daysAgo--) {
+        const snapshotDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+        const dateStr = snapshotDate.toISOString().split('T')[0];
+        
+        for (const account of accounts) {
+            // Simulate balance variation over time (±10% from current)
+            const variance = account.balance * 0.1 * (Math.random() - 0.5);
+            const historicalBalance = account.balance + variance * (daysAgo / 30);
+            
+            snapshots.push({
+                account_id: account.id,
+                user_id: userId,
+                balance: Math.round(historicalBalance * 100) / 100,
+                snapshot_date: dateStr,
+                source: 'seed',
+            });
+        }
+    }
+
+    // Insert snapshots (may fail if table doesn't exist yet, that's ok)
+    try {
+        for (const snapshot of snapshots) {
+            await supabase
+                .from('balance_snapshots')
+                .upsert(snapshot, { onConflict: 'account_id,snapshot_date' });
+        }
+        console.log(`   ✅ Created ${snapshots.length} balance snapshots\n`);
+    } catch (err) {
+        console.log(`   ⚠️  Could not create balance snapshots (run migration 002_ml_tables.sql first)\n`);
+    }
 
     // Summary
     const totalCredits = transactions.filter(t => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0);
     const totalDebits = transactions.filter(t => t.type === 'DEBIT').reduce((sum, t) => sum + t.amount, 0);
     const totalBalance = accountsData.reduce((sum, a) => sum + a.balance, 0);
+    const recurringCount = transactions.filter(t => t.txn_id.includes('REC')).length;
 
     console.log('═══════════════════════════════════════════════');
     console.log('✅ DATABASE SEEDED SUCCESSFULLY!');
     console.log('═══════════════════════════════════════════════');
+    console.log(`   Period: ${MONTHS_OF_DATA} months of transaction history`);
     console.log(`   Total Balance: ₹${totalBalance.toLocaleString('en-IN')}`);
-    console.log(`   Total Credits (6 months): ₹${totalCredits.toLocaleString('en-IN')}`);
-    console.log(`   Total Debits (6 months): ₹${totalDebits.toLocaleString('en-IN')}`);
+    console.log(`   Total Transactions: ${transactions.length}`);
+    console.log(`   - Recurring: ${recurringCount}`);
+    console.log(`   - One-time: ${transactions.length - recurringCount}`);
+    console.log(`   Total Credits: ₹${totalCredits.toLocaleString('en-IN')}`);
+    console.log(`   Total Debits: ₹${totalDebits.toLocaleString('en-IN')}`);
+    console.log(`   Net Cash Flow: ₹${(totalCredits - totalDebits).toLocaleString('en-IN')}`);
     console.log('═══════════════════════════════════════════════\n');
-    console.log('🚀 Refresh your dashboard to see the data!');
+    console.log('🚀 Next steps:');
+    console.log('   1. Run migration: server/migrations/002_ml_tables.sql');
+    console.log('   2. Start ML service: cd ml && uvicorn src.main:app --reload');
+    console.log('   3. Trigger analysis: POST http://localhost:8000/api/ml/analyze/{user_id}');
+    console.log(`   4. User ID: ${userId}`);
 }
 
 seedDatabase().catch(console.error);

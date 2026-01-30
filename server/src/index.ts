@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 
 import consentRoutes from './routes/consent';
 import webhookRoutes from './routes/webhooks';
+import mlRoutes from './routes/ml';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +31,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/consent', consentRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/ml', mlRoutes);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

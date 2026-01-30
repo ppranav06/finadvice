@@ -1,0 +1,14 @@
+.env
+# all envs, even in subdirectories
+**/*.env
+# ignore env files in ml directory
+ml/*.env
+
+# Python virtual environments
+venv/
+ml/venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/

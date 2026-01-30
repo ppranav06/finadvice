@@ -6,6 +6,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Callback } from './pages/Callback';
 import { Transactions } from './pages/Transactions';
+import { Chat } from './pages/Chat';
 import './index.css';
 
 const queryClient = new QueryClient();
@@ -94,7 +95,7 @@ function AppRoutes() {
                 path="/chat"
                 element={
                     <ProtectedRoute>
-                        <Dashboard />
+                        <Chat />
                     </ProtectedRoute>
                 }
             />
